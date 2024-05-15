@@ -1,0 +1,719 @@
+---
+title: 'S&DS 230 Final Project: Goal Gurus'
+output:
+  word_document: default
+  html_notebook: default
+  pdf_document: default
+---
+
+```{r setup, include = FALSE}
+
+knitr::opts_chunk$set(echo=FALSE, warning = FALSE, message = FALSE)
+
+```
+
+# S&DS 230 Final Project
+**GROUP NAME: Goal Gurus**
+
+**Introduction (Background and Motivation)**
+
+Soccer, a game celebrated for its dynamic blend of offensive and defensive strategies, is rich in statistical insights encompassing various facets such as offensive/defensive capabilities, set-piece proficiency, and individual player attributes. As the application of statistical analysis continues to permeate the sporting world, most notably in sports such as baseball, the goal of our project is to harness a data-driven approach to forecast the goal-scoring potential of our favorite players and uncover trends pivotal to the evolution of this amazing game.
+
+We acquired a comprehensive dataset from Kaggle, comprising the per-90-minute statistics of professional soccer players playing in Europe's top five leagues: the Premier League, Ligue 1 Uber Eats, Bundesliga, Serie A, and La Liga. This dataset encompasses over 2500 entries, each representing a player, alongside 124 columns representing various game statistics.
+
+
+
+
+## Data and Data cleaning process
+
+
+```{r, include = FALSE}
+library(car)
+library(leaps)
+library(lubridate)
+library(rvest)
+library(olsrr)
+library(corrplot)
+library(leaps)
+library(MASS)
+source("http://www.reuningscherer.net/s&ds230/Rfuncs/regJDRS.txt")
+```
+
+
+**Here we read in the data**
+```{r, echo=FALSE}
+soccer_data <- read.csv("2022-2023 Football Player Stats (1).csv")
+
+#Getting to know the data
+#dim(soccer_data)
+#head(soccer_data)
+#colnames(soccer_data)
+```
+*The raw dataset we read in has data on 2518 professional soccer players and 124 variables relating to their 2022-2023 season soccer playing statistics, ranging from minutes played to number of goals. This dataset can be found here:* [**LINK**](https://www.kaggle.com/datasets/vivovinco/20222023-football-player-stats)
+
+**Variables that We Use and Brief Description**
+
+There are over 124 variables, but we only use 13. Here they are listed below, along with a brief description:
+
+* Continent (categorical): Continent of the country a player represents for their national team
+* Age (continuous): Age of the player
+* Position (categorical): The primary postion a player plays in - forward, midfielder, and defender
+* Goals (continuous): Average number of goals scored per 90 minutes
+* Assists (continuous): Average number of assists (pass to another teammate that helped score a goal) provided per 90 minutes
+* PassCompletionPct (continuous): Percent of average number of completed passes (not intercepted opponent) over total pass attempts made in a game
+* League (categorical): The league a player participates in for their club team
+* MinutesPer90 (continuous): Average number of minutes played per game
+* ShotsOnTarget (continuous): Number of shot attempts made within the vicinity of the goal
+* PenaltyKicksAttempted (continuous): Average number of penalty kicks attempted per game
+* CornerKicks (continuous): Average number of corner kicks taken by a player per game
+* YellowCards (continuous): Average number of yellow cards (warnings given for rule-violations) given to a player per 90 minute period
+* CompletedPasses (continuous): Average number of completed passes (a pass that retains possession by another teammate) made by a player per game
+
+
+**Data Cleaning Process Description**
+
+*1. There were a lot of corrupt letters in player names and team names in the raw dataset, so we first cleaned the corrupt characters and replaced them with the correct ones. This was a tedious process, but the corrupt characters were not random; mostly special and decorated characters were corrupted, so it was relatively simple to root out using gsub.* 
+
+```{r, echo = FALSE}
+# Convert the players column to UTF-8 in order to clean the data
+soccer_data$Player <- iconv(soccer_data$Player, "Windows-1252", "UTF-8")
+
+# Clean the names data, because corrupt characters/non-standard (english alphabet) characters exist and we need to replace them with the proper characters
+soccer_data$Player <- gsub("\\xe7", "ç", soccer_data$Player)
+soccer_data$Player <- gsub("\\x96", "–", soccer_data$Player)
+soccer_data$Player <- gsub("\\x95", "•", soccer_data$Player)
+soccer_data$Player <- gsub("\\x8e", "Ž", soccer_data$Player)
+soccer_data$Player <- gsub("\\x9c", "œ", soccer_data$Player)
+soccer_data$Player <- gsub("\\x8a", "Š", soccer_data$Player)
+soccer_data$Player <- gsub("\\x88", "ˆ", soccer_data$Player)
+soccer_data$Player <- gsub("\\x87", "‡", soccer_data$Player)
+soccer_data$Player <- gsub("\\x97", "—", soccer_data$Player)
+soccer_data$Player <- gsub("\\x5f", "_", soccer_data$Player)
+soccer_data$Player <- gsub("\\x91", "‘", soccer_data$Player)
+soccer_data$Player <- gsub("\\x92", "’", soccer_data$Player)
+soccer_data$Player <- gsub("\\x99", "™", soccer_data$Player)
+soccer_data$Player <- gsub("\\x83", "ƒ", soccer_data$Player)
+soccer_data$Player <- gsub("\\x94", '”', soccer_data$Player)
+soccer_data$Player <- gsub("\\x93", '”', soccer_data$Player)
+soccer_data$Player <- gsub("\\x9f", 'Ÿ', soccer_data$Player)
+soccer_data$Player <- gsub("\\x98", '˜', soccer_data$Player)
+soccer_data$Player <- gsub("\\x82", '‚', soccer_data$Player)
+soccer_data$Player <- gsub("\\x8b", '‹', soccer_data$Player)
+soccer_data$Player <- gsub("\\x9a", 'š', soccer_data$Player)
+soccer_data$Player <- gsub("\\xbf", '¿', soccer_data$Player)
+soccer_data$Player <- gsub("\\xbe", '¾', soccer_data$Player)
+soccer_data$Player <- gsub("\\x84", '„', soccer_data$Player)
+soccer_data$Player <- gsub("\\x85", '…', soccer_data$Player)
+soccer_data$Player <- gsub("\\x86", '†', soccer_data$Player)
+soccer_data$Player <- gsub("\\xee", 'î', soccer_data$Player)
+soccer_data$Player <- gsub("\\x3f", '?', soccer_data$Player)
+soccer_data$Player <- gsub("\\xa7", '§', soccer_data$Player)
+soccer_data$Player <- gsub("\\?", "", soccer_data$Player)
+soccer_data$Player <- gsub("ç", "A", soccer_data$Player)
+soccer_data$Player <- gsub("–", "n", soccer_data$Player)
+soccer_data$Player <- gsub("•", "i", soccer_data$Player)
+soccer_data$Player <- gsub("Ž", "e", soccer_data$Player)
+soccer_data$Player <- gsub("œ", "u", soccer_data$Player)
+soccer_data$Player <- gsub("Š", "o", soccer_data$Player)
+soccer_data$Player <- gsub("‡", "a", soccer_data$Player)
+soccer_data$Player <- gsub("—", "o", soccer_data$Player)
+soccer_data$Player <- gsub("_", "s", soccer_data$Player)
+soccer_data$Player <- gsub("‘", "e", soccer_data$Player)
+soccer_data$Player <- gsub("’", "i", soccer_data$Player)
+soccer_data$Player <- gsub("™", "o", soccer_data$Player)
+soccer_data$Player <- gsub("ƒ", "E", soccer_data$Player)
+soccer_data$Player <- gsub('”', "i", soccer_data$Player)
+soccer_data$Player <- gsub('Ÿ', "u", soccer_data$Player)
+soccer_data$Player <- gsub('˜', "o", soccer_data$Player)
+soccer_data$Player <- gsub('‚', "C", soccer_data$Player)
+soccer_data$Player <- gsub('‹', "a", soccer_data$Player)
+soccer_data$Player <- gsub('š', "o", soccer_data$Player)
+soccer_data$Player <- gsub('¿', "o", soccer_data$Player)
+soccer_data$Player <- gsub('¾', "ae", soccer_data$Player)
+soccer_data$Player <- gsub('„', "N", soccer_data$Player)
+soccer_data$Player <- gsub('…', "O", soccer_data$Player)
+soccer_data$Player <- gsub('†', "U", soccer_data$Player)
+soccer_data$Player <- gsub('î', "O", soccer_data$Player)
+soccer_data$Player <- gsub('§', "s", soccer_data$Player)
+soccer_data$Player <- gsub("ˆ", "a", soccer_data$Player)
+
+
+#Now cleaning corrupt team names as well
+soccer_data$Squad <- iconv(soccer_data$Squad, "Windows-1252", "UTF-8")
+soccer_data$Squad <- gsub(".*tico Madrid", "Atletico Madrid", soccer_data$Squad)
+soccer_data$Squad <- gsub("Almer.*", "Almeria", soccer_data$Squad)
+soccer_data$Squad <- gsub(".*diz", "Cadiz", soccer_data$Squad)
+soccer_data$Squad <- gsub(".*ln", "Koln", soccer_data$Squad)
+```
+
+*2. Next, we discovered that there were very detailed soccer positions assigned to each player (9 in total), but we just wanted to consolidate them into three the fundamental positions: Defender, Forward, and Midfielder, so we did that by recoding them.*
+```{r, echo=FALSE}
+#Merge positions (make all defender variations defenders, make all midfielder variations midfielders, make all forward variations forwards)
+soccer_data$Pos <- recode(soccer_data$Pos, "c('DF', 'DFFW', 'DFMF') = 'Defender'; c('FW', 'FWDF', 'FWMF') = 'Forward'; c('MF', 'MFDF', 'MFFW') = 'Midfielder'; 'GK' = 'Goalkeeper'")
+```
+
+*3. Occasionally, player names were NA, so we removed those. Also, as players transferred around during the season, the same player would occupy multiple rows, which could disrupt the analysis. As a result, we removed duplicate rows for players.* 
+```{r, echo=FALSE}
+# remove rows where the Player is NA and duplicate rows
+soccer_data <- soccer_data[!is.na(soccer_data$Player), ]
+soccer_data <- soccer_data[!duplicated(soccer_data$Player), ]
+```
+
+*4. To make the dataframe more intuitive to read, we made the player name the row name*
+```{r, echo=FALSE}
+# make the row names the Player Names
+rownames(soccer_data) <- soccer_data$Player
+soccer_data$Player <- NULL
+```
+
+*5. We deabbreviated the variable names to make them more understandable.*
+```{r, echo=FALSE}
+# Change column names to be easier to understand
+names(soccer_data) <- c(
+  "Rank", "Nationality", "Position", "Team", 
+  "League", "Age", "BirthYear", "MatchesPlayed", "MatchesStarted", 
+  "MinutesPlayed", "MinutesPer90", "Goals", "TotalShots", 
+  "ShotsOnTarget", "ShotsOnTargetPct", "GoalsPerShot", "GoalsPerShotOnTarget", 
+  "ShotDistance", "ShotsFromFreeKicks", "PenaltyKicksMade", 
+  "PenaltyKicksAttempted", "PassesCompleted", "PassesAttempted", 
+  "PassCompletionPct", "PassTotalDistance", "PassProgressiveDistance", 
+  "ShortPassesCompleted", "ShortPassesAttempted", "ShortPassCompletionPct", 
+  "MediumPassesCompleted", "MediumPassesAttempted", "MediumPassCompletionPct", 
+  "LongPassesCompleted", "LongPassesAttempted", "LongPassCompletionPct", 
+  "Assists", "PassesLeadingToShot", "PassesIntoFinalThird", 
+  "PassesIntoPenaltyArea", "CrossesIntoPenaltyArea", "ProgressivePasses", 
+  "TotalPassesAttempted", "LiveBallPasses", "DeadBallPasses", 
+  "FreeKickPasses", "ThroughBalls", "Switches", "Crosses", 
+  "ThrowIns", "CornerKicks", "InswingingCorners", "OutswingingCorners", 
+  "StraightCorners", "CompletedPasses", "Offsides", "PassesBlocked", 
+  "ShotCreatingActions", "LiveBallPassesLeadingToShot", "DeadBallPassesLeadingToShot", 
+  "DribblesLeadingToShot", "ShotsLeadingToShot", "FoulsDrawnLeadingToShot", 
+  "DefensiveActionsLeadingToShot", "GoalCreatingActions", "LiveBallPassesLeadingToGoal", 
+  "DeadBallPassesLeadingToGoal", "DribblesLeadingToGoal", "ShotsLeadingToGoal", 
+  "FoulsDrawnLeadingToGoal", "DefensiveActionsLeadingToGoal", 
+  "Tackles", "TacklesWon", "TacklesDefensiveThird", "TacklesMidfieldThird", 
+  "TacklesAttackingThird", "DribblersTackled", "DribblingDuels", 
+  "DribblersTackledPct", "DribbledPast", "Blocks", "ShotBlocks", 
+  "PassBlocks", "Interceptions", "TacklesPlusInterceptions", 
+  "Clearances", "ErrorsLeadingToShot", "Touches", "TouchesDefensivePenaltyArea", 
+  "TouchesDefensiveThird", "TouchesMidfieldThird", "TouchesAttackingThird", 
+  "TouchesAttackingPenaltyArea", "LiveBallTouches", "TakeOnsAttempted", 
+  "TakeOnsSucceeded", "TakeOnSuccessPct", "TakeOnTackled", 
+  "TakeOnTackledPct", "Carries", "CarryTotalDistance", "CarryProgressiveDistance", 
+  "ProgressiveCarries", "CarriesIntoFinalThird", "CarriesIntoPenaltyArea", 
+  "FailedCarries", "Dispossessed", "Receptions", "ProgressiveReceptions", 
+  "YellowCards", "RedCards", "SecondYellowCards", "FoulsCommitted", 
+  "FoulsDrawn", "OffsideCalls", "CrossAttempts", "TacklesWonPossession", 
+  "PenaltyKicksWon", "PenaltyKicksConceded", "OwnGoals", "LooseBallsRecovered", 
+  "AerialsWon", "AerialsLost", "AerialWinPct"
+)
+# checks
+# head(soccer_data)
+```
+
+*6. We also created a new variable called continents. We did this by recoding the player countries into the respective continents, and subsequently inserted that into a new variable column.*
+```{r, echo=FALSE}
+# Group the countries based on continents
+soccer_data$Continent <- recode(soccer_data$Nationality, "'ALB' = 'Europe'; 'ALG' = 'Africa'; 'ANG' = 'Africa'; 'ARG' = 'South America'; 'ARM' = 'Europe'; 'AUS' = 'Oceania'; 'AUT' = 'Europe'; 'BDI' = 'Africa'; 'BEL' = 'Europe'; 'BEN' = 'Africa'; 'BFA' = 'Africa'; 'BIH' = 'Europe'; 'BRA' = 'South America'; 'BUL' = 'Europe'; 'CAN' = 'North America'; 'CGO' = 'Africa'; 'CHI' = 'South America'; 'CIV' = 'Africa'; 'CMR' = 'Africa'; 'COD' = 'Africa'; 'COL' = 'South America'; 'COM' = 'Africa'; 'CPV' = 'Africa'; 'CRC' = 'North America'; 'CRO' = 'Europe'; 'CTA' = 'South America'; 'CYP' = 'Asia'; 'CZE' = 'Europe'; 'DEN' = 'Europe'; 'DOM' = 'North America'; 'ECU' = 'South America'; 'EGY' = 'Africa'; 'ENG' = 'Europe'; 'EQG' = 'Africa'; 'ESP' = 'Europe'; 'FIN' = 'Europe'; 'FRA' = 'Europe'; 'GAB' = 'Africa'; 'GAM' = 'Africa'; 'GEO' = 'Asia'; 'GER' = 'Europe'; 'GHA' = 'Africa'; 'GLP' = 'North America'; 'GNB' = 'Africa'; 'GRE' = 'Europe'; 'GRN' = 'North America'; 'GUF' = 'South America'; 'GUI' = 'Africa'; 'HAI' = 'North America'; 'HON' = 'North America'; 'HUN' = 'Europe'; 'IRL' = 'Europe'; 'IRN' = 'Asia'; 'ISL' = 'Europe'; 'ISR' = 'Asia'; 'ITA' = 'Europe'; 'JAM' = 'North America'; 'JPN' = 'Asia'; 'KOR' = 'Asia'; 'KVX' = 'Europe'; 'LTU' = 'Europe'; 'LUX' = 'Europe'; 'LVA' = 'Europe'; 'MAD' = 'Africa'; 'MAR' = 'Africa'; 'MEX' = 'North America'; 'MKD' = 'Europe'; 'MLI' = 'Africa'; 'MNE' = 'Europe'; 'MOZ' = 'Africa'; 'MTQ' = 'North America'; 'NED' = 'Europe'; 'NGA' = 'Africa'; 'NIR' = 'Europe'; 'NOR' = 'Europe'; 'NZL' = 'Oceania'; 'PAR' = 'South America'; 'PER' = 'South America'; 'PHI' = 'Asia'; 'POL' = 'Europe'; 'POR' = 'Europe'; 'ROU' = 'Europe'; 'RSA' = 'Africa'; 'RUS' = 'Europe'; 'SCO' = 'Europe'; 'SEN' = 'Africa'; 'SLE' = 'Africa'; 'SRB' = 'Europe'; 'SUI' = 'Europe'; 'SUR' = 'South America'; 'SVK' = 'Europe'; 'SVN' = 'Europe'; 'SWE' = 'Europe'; 'TOG' = 'Africa'; 'TUN' = 'Africa'; 'TUR' = 'Asia'; 'UKR' = 'Europe'; 'URU' = 'South America'; 'USA' = 'North America'; 'UZB' = 'Asia'; 'VEN' = 'South America'; 'WAL' = 'Europe'; 'ZAM' = 'Africa'; 'ZIM' = 'Africa'")
+#Check list of continents
+#table(soccer_data$Continent)
+#Update league name
+```
+
+*7. We had to respect the official, sponsered name of Ligue 1, so we corrected it.*
+```{r, echo=FALSE}
+soccer_data$League <- gsub("Ligue 1", "Ligue 1 Uber Eats", soccer_data$League)
+```
+
+*8. We only actually analyzed 13 of the 124 variables, so we subsetted them out to create a new, smaller dataframe, which would be easier to work with throughout the actual analysis.*
+```{r, echo=FALSE}
+#update valid columns and assign dataset
+soccer_data2 <- subset(soccer_data, select = c(Continent, Age, Position, Goals, Assists, PassCompletionPct, League, MinutesPer90, ShotsOnTarget, PenaltyKicksAttempted, CornerKicks, YellowCards, CompletedPasses))
+```
+
+*9. We also noticed that some of the pass completion percentages seemed unreasonably high or unreasonably low, so we replaced the values for the PassCompletionPct's that were either 100 (too accurate to be a reasonable statistic) or 0 (too inaccurate to be a reasonable statistic) with NA.*
+```{r, echo=FALSE}
+#Filter out extraneous values in passcompletion percentages equal to 100 or 0 as well as tackles equal to 0 
+soccer_data2$PassCompletionPct[soccer_data2$PassCompletionPct == 100] <- NA
+soccer_data2$PassCompletionPct[soccer_data2$PassCompletionPct == 0] <- NA
+```
+
+**Issue we encountered during data cleaning:** *The corrupt characters were a bit frustrating to root out and involved a process of guess and checking to correct them into their true, non-corrupt values. Additionally, we had to clean the Yellow Card variable later in two seperate chunks because each of the two different analyses required slightly different cleaning methodologies, which we will explain later on.*
+
+# Analysis
+*Now, we move onto the analysis portion of our project*
+
+
+## T-Test
+
+
+In the cleaned dataset, we have Pass Completion, a percentage as a variable. We're interested in seeing if there is a significant difference between the pass completion rate between forwards and defenders because intuitively, defenders should be better at passing because they're in charge of protecting the goal, and it would make more sense if they are more successful at passing (implying higher pass completion) on average than forwards.
+
+Our null hypothesis is that the difference between mean pass completion percentages of forwards and defenders is zero. Our alternative hypothesis is that the difference between mean pass completion percentages of forwards and defenders is not zero.
+
+Hence, we used Welch's two-sample t-test with a significance level of 0.05 to test the significance.
+
+```{r, echo=FALSE}
+#Creates a subset of relavent variables for t.test analysis
+PassComp_Forw_Def <- subset(soccer_data2[, c("Position", "PassCompletionPct")], soccer_data2$Position %in% c("Forward", "Defender"))
+#Removes rows where PassCompPct is NA
+PassComp_Forw_Def <- na.omit(PassComp_Forw_Def)
+
+# First, I will create a boxplot that plots the Pass Completion Percentages grouped by Defenders and Forwards superimposing a red dot for mean pass completion percentage:
+boxplot(PassComp_Forw_Def$PassCompletionPct ~ PassComp_Forw_Def$Position, col = c(2:3), main = "Box Plot of Pass Completion Percentages by Position, removing pass completions of 100% and 0%", xlab = "Player Position", ylab = "Pass Completion Percentage", cex.main = 0.5)
+mean_PassComp <- tapply(PassComp_Forw_Def$PassCompletionPct, PassComp_Forw_Def$Position, mean)
+points(mean_PassComp, pch = 19, col = "red")
+text(x = c(1:2), y = mean_PassComp - 2, labels = round(mean_PassComp, 2))
+
+```
+From boxplots, it appears that the IQR of the data between the two positions is fairly similar (implying similar variability), and that the data is not significantly skewed for either of the two positions, so we can proceed with the t-test. 
+
+```{r, echo=FALSE}
+t.test(PassCompletionPct ~ Position, data = PassComp_Forw_Def)
+```
+**Discussion of Results:** 
+
+*After running the t.test on pass-completion percentages between positions, we can reject the null hypothesis and can conclude that there is a statistically significant difference between the mean pass completion percent between defenders and forwards because the p value is less than 2.2e-16, which is under our significance level of 0.05. Thus, it demonstrates that the mean pass completion percent of defenders is statistically significantly greater than the mean pass completion percent of forwards.*
+
+
+## Bootstrap Confidence Interval
+
+Now, we will create a non-parametric bootstrapped confidence interval for the hypothesis testing we just did, whether the difference between mean pass completion percentages of forwards and defenders is not 0.
+
+```{r, echo=FALSE}
+#Set seed for consistency
+set.seed(1)
+# Set Number of Bootstrap Samples
+N_PC <- 10000 
+# Empty vector for sample mean differences in Pass-Comp Percentages
+diffPassComp <- rep(NA, N_PC)
+# Bootstrap random sampling w/ replacement procedure
+for (i in 1:N_PC) {
+  sD <- sample(PassComp_Forw_Def$PassCompletionPct[PassComp_Forw_Def$Position == "Defender"],
+               sum(PassComp_Forw_Def$Position == "Defender"), replace = TRUE)
+  sF <- sample(PassComp_Forw_Def$PassCompletionPct[PassComp_Forw_Def$Position == "Forward"],
+               sum(PassComp_Forw_Def$Position == "Forward"), replace = TRUE)
+  diffPassComp[i] <- mean(sD) - mean(sF)
+}
+#95 percent confidence interval from bootstrap
+(ci_diffPassComp <-  quantile(diffPassComp, c(0.025, 0.975)))
+```
+The above is the 95% non-parametric confidence interval generated from the bootstrap. 
+
+```{r, echo=FALSE}
+#95 percent confidence interval from parametric test
+(ci_diffPassComp_Para <- t.test(PassCompletionPct ~ Position, data = PassComp_Forw_Def, conf.level = 0.95)$conf.int)
+```
+The above is the 95% confidence interval generated from the t.test. 
+
+```{r, echo=FALSE}
+#Now I will create a histogram were I plot the bootstrapped mean Pass Completion Percent Differences, with the bootstrapped CI and parametric CI superimposed
+hist(diffPassComp, col = "salmon", main = "Differences in 10,000 Bootstrap Sample PassCompletionPCT Means between Def. and Forw. soccer positions", cex.main = 0.5, ylab = "Frequency", xlab = "Difference in Mean(PassCompletionPCT)", breaks = 35, cex.axis = 0.9)
+abline(v = ci_diffPassComp, lwd = 3, col = "red")
+abline(v = ci_diffPassComp_Para, lwd = 3, col = "green", lty = 2)
+legend("topright", c("Parametric CI","Bootstrapped CI"), lwd = 3, col = c("green","red"), lty = c(2,1))
+```
+The above is the histogram where we ploted the bootrsapped mean pass completion percent differences between the positions, with the boostrapped and parametric CI superimposed as lines. 
+
+
+**Bootstrap Discussion:**
+*The lower bound of the Parametric CI is slightly lower than the lower bound of the Bootstrap CI, and the upper bound of the parametric CI is slightly lower than the upperbound of the bootstrapped CI, but overall, the two CI's appear fairly similar and both do not contain 0, so via both bootstrapped and parametric 95% confidence intervals, we can reject the null hypothesis and say that that there exists statistically significant difference between the mean(PassCompletionPct) of defenders vs the mean(PassCompletionPct) of forwards, as our 95% confidence intervals do not contain a difference of 0.*
+
+
+
+
+## Correlation
+
+For our correlation test, we wanted to explore the relationship between yellow cards received during a match and the number of tackles a player makes, under the hypothesis that a player who perform more tackles are associated with they receiving a greater number of yellow cards per game, because playing more rough should intuitively associate with receiving more yellow cards (warnings) from referees.
+
+```{r, echo=FALSE}
+
+
+#Generate histogram of raw Yellow Card and Tackle data
+hist(soccer_data$YellowCards, col = "blue", main = "Hist of Yellow Cards", xlab = "Yellow Cards", breaks = 50, cex.main = 0.6)
+hist(soccer_data$Tackles, col = "blue", main = "Hist of Tackles", xlab = "Tackles", breaks = 50, cex.main = 0.6)
+
+#Generate histogram of log transformed Yellow Card and Tackle data
+hist(log(soccer_data$YellowCards), col = "red", main = "Hist of log(Yellow Cards)", xlab = "log(Yellow Cards)", breaks = 50, cex.main = 0.6)
+hist(log(soccer_data$Tackles), col = "red", main = "Hist of log(Tackles)", xlab = "log(Tackles)", breaks = 50, cex.main = 0.6)
+```
+
+Based on the histogram of the average yellow cards and tackles per match, the data appears to be heavily left skewed and contains mostly 0s (blue graph). Therefore, we used a log transformation of both variables which helped make the distribution more normal and less skewed as shown above.
+
+Furthermore, we removed all instances were yellow cards were zero or greater than 1 (which is unreasonable for soccer players, because it's difficult for a player to average more than 1 yellow card per game), and we then double checked the normality again with a normal quantile plot for the yellow cards below.
+
+```{r, echo=FALSE}
+#Filter out and create dataset of yellow cards (more than 0 and less than 1) and tackles (more than 0)
+cor_data <- soccer_data[soccer_data$YellowCards > 0 & soccer_data$YellowCards < 1 & soccer_data$Tackles > 0,  ] 
+
+qqPlot(log(cor_data$YellowCards), main = "Quantile Plot of log-transformed YCard Data", xlab = "Normal Quantiles", ylab = "log(YellowCards)")
+
+```
+From this norm-quantile plot, we can see that the it points are positive, linear and largely within the blue bounds, which suggests that the log-transformed yellow card data is normally distributed, which meets the assumptions of the correlation test. We also log transformed that tackles data to meet the assumptions of the correlation test, as seen in the previous histograms. 
+
+
+```{r}
+
+#Create a blank plot of log transformed yellow card and tackle data and assign a title
+plot(log(cor_data$YellowCards), log(cor_data$Tackles), pch = 19, col = "blue", xlab = "log(Yellow Cards)", ylab = "log(Tackles)", main = "Scatterplot of log(Yellow Cards) vs log(Tackles)", cex.main = 0.7)
+
+#Display correlation coefficient between log transformed yellow card and tackle data
+mtext(paste("Correlation = ", round(cor(log(cor_data$Tackles), log(cor_data$YellowCards)), 2)), cex = 0.65)
+
+#Create linear model based on two variables and display line on plot
+lm_model <- lm(log(cor_data$Tackles) ~ log(cor_data$YellowCards))
+abline(a = coef(lm_model)[2], b = coef(lm_model)[1], col = "red", lwd = 3)
+```
+**Discussion of Correlation Test:**
+
+*Our correlation coefficient of 0.22 indicates there is a somewhat moderate positive relationship between the two variables and our slope of 0.2357503  suggests that a player performs about  0.2357503  more log(tackles) per game for each additional log(yellow card) they receive on average. The intercept of 0.7237923 suggests that a player who receives 0 yellow cards on average will perform 0.7237923 tackles per match. It should be noted we removed outliers of players with 0 tackles or 0 yellow cards as it suggests they do not play enough game time to actively count as a starter as well as any player who receive on average 1 or more yellow cards per game as it's unreasonable to commit that many fouls per game on average. The results of our test support our argument that a player that receives more tackles will tend to receive more yellow cards per game on average.*
+
+
+## Permutation Test
+
+One question we're interested in exploring further is whether there is a significant difference in mean yellow card frequencies between forwards and defenders. Intuitively, defenders should have a have a higher yellow card frequency on average because they defend the goal and as a result have an incentive to play rougher to prevent the opposite team from scoring. Hence, the two samples will be defenders and forwards.
+
+This is our null hypothesis, that the difference in mean Yellow Cards is 0 between positions.
+$$H_0: \mu_{Defender}-\mu_{Forward}=0$$
+
+This is our alternative hypothesis:, that the difference in means is not 0 between positions.
+$$H_a: \mu_{Defender}-\mu_{Forward} \ne 0$$
+
+```{r, echo=FALSE}
+#Set seed for consistency
+set.seed(1)
+#First, I will create a subset of the main dataframe consisting only of the variables of interest
+YellowCard_Forw_Def <- subset(soccer_data2[, c("Position", "YellowCards")], soccer_data2$Position %in% c("Forward", "Defender"))
+#We will also do some additional cleaning in the section: remove any player with a yellowcard frequency greater than 1, because it doesn't make sense for a typical player to average more than 1 yellow card per 90 minutes
+YellowCard_Forw_Def <-YellowCard_Forw_Def[YellowCard_Forw_Def$YellowCards <= 1, ]
+
+#Next, I will get the actual mean differences of yellow card frequencies between the two positions
+realdiff <- by(YellowCard_Forw_Def$YellowCards, YellowCard_Forw_Def$Position, mean)
+realdiff <- realdiff[1] - realdiff[2] #difference in mean yellow card frequency between the defenders and forwards
+
+#randomly assign player position labels
+N_YCARD_POS <- 10000
+diffvals_YCARD_POS <- rep(NA, N_YCARD_POS)
+for (i in 1:N_YCARD_POS) {
+  fakeposition <- sample(YellowCard_Forw_Def$Position)  
+  diffvals_YCARD_POS[i] <- mean(YellowCard_Forw_Def$YellowCards[fakeposition == "Defender"]) -  mean(YellowCard_Forw_Def$YellowCards[fakeposition == "Forward"])
+}
+
+#Creating the histogram of the permuted sample and a superimposed line with the actual mean diff. 
+hist(diffvals_YCARD_POS, col = "yellow", main = "Permuted Sample Difference in Mean Yellow Card Frequencies of Positions", xlab = "Yellow Cards (per 90 minutes)", breaks = 50, cex.main = 0.6, xlim = c(-0.04,0.05))
+abline(v = realdiff, col = "blue", lwd = 3)
+text(realdiff + 0.002, 370 , paste("Actual Diff in Means =", round(realdiff,3)),srt = 270)
+
+
+
+
+```
+The above histogram shows the permuted sample difference in mean yellow cards between positions, with a line superimposed at the actual difference in mean yellow cards between positions. 
+
+Now that we have the permuted sample means, we went to calculate the extremeness of our alternative hypothesis, which we will test using one-sided p-values, following the alternative hypothesis below.
+
+$$H_a: \mu_{Defender}-\mu_{Forward} > 0$$
+Extremeness would mean obtaining a fake test statistic greater than or equal to our actual test statistic.
+```{r, echo=FALSE}
+mean(diffvals_YCARD_POS >= realdiff)
+
+```
+
+**PERMUTATION TEST RESULTS & P-VALUE DISCUSSION:**
+
+*0 suggests that none of our 10000 simulations produced a difference that was more extreme than the actual difference in means. So our p-value is less than 0.0001, which is less than our significance level of 0.05. Because our permutation test's p-value is less than 0.0001, which is less than our significance level of 0.05, we reject our null hypothesis that there is no difference between defender and forward means, and conclude that defenders have a statistically significantly greater mean yellow card frequency compared to forwards.*
+
+## Multiple Regression
+
+**Description of Plan:**
+
+Our goal is to use multiple linear regression to predict the number of goals scored based on a set of predictors:
++ Assists to gauge whether play making is tied to goal scoring
++ Pass completion percentage to measure accuracy of passes and ball possession
++ Minutes per 90 to measure playtime 
++ Shots on target to measure shot accuracy 
++ Penalty kicks attempted to measure the number of penalty opportunities
++ Cornerkicks to measure effectiveness of set pieces
++ Yellow cards to see its relation to player behavior
+
+Multiple linear regression makes the most sense for this task as it enables a player to determine statistically significant factors in a game that lead to higher goal scoring opportunities on average. To conduct our multiple linear regression, we made a dataset from soccer_data2 containing only these variables and used best subsets regression with BIC to determine the number and specific predictors to use in our model. Based on our normal quantile and residual plots, we'll make assessments for transformations and perform our final analysis of the results - contextualizing our findings and further analysis such as looking at potential collinearity.
+
+```{r, echo=FALSE}
+# Create subset dataset of variables used in linear regression model
+soccer_regression <- na.omit(soccer_data2[ ,c("Goals", "Assists", "PassCompletionPct","MinutesPer90", "ShotsOnTarget", "PenaltyKicksAttempted", "CornerKicks", "YellowCards")])
+
+
+#Look at correlation coefficient between all variables (predictors and explanatory)
+(cor1 <- round(cor(soccer_regression), 2))
+
+#Fit best subsets regression, get summary information for the results, and generate TRUE/FALSE table
+mod2 <- regsubsets(Goals ~., data = soccer_regression)
+mod2sum <- summary(mod2)
+#mod2sum$which
+
+#Find optimal number of variables and names using BIC
+which.min(mod2sum$bic)
+
+#Display names of predictors
+names(soccer_regression)[mod2sum$which[which.min(mod2sum$bic), ]][-1]
+
+```
+
+*Based on our preliminary analysis, number of goals scored is positively correlated with all the predictors apart from pass completion percentage. Moreover, minutes per 90 (0.36), shots on target (0.37), and penalty kick attempts (0.42) appear to have a moderately strong relationship with goals scored. Using best subset regression, the optimal number of predictors to use for our model according to BIC (which we used to optimize the number of predictors given the large number of variables we started out with) is 5 and those predictors are: assists, pass completion percentage, minutes per 90, shots on target, and penalty kicks attempted.*
+
+
+```{r, echo=FALSE}
+#Fit model according to BIC based on most optimal variables
+fitmodel <- lm(Goals ~ Assists + PassCompletionPct + MinutesPer90 + ShotsOnTarget + PenaltyKicksAttempted, data = soccer_regression)
+
+#Get summary statistics for model
+summary(fitmodel)
+```
+
+*Based on the best fit model using BIC, the R-squared of 0.416 implies that 41.6% of the variability in goals scored can be explained by our model using the five predictors: assists, pass completion percentage, minutes per 90, shots on target, and penalty kicks attempted. All of our predictors have p-values less than our alpha of 0.05, which indicates that they are statistically significant predictors of goals. Moreover, based on our coefficients, for every additional assist goal scored increases by 0.885, for every one percent increase in pass completion percentage goals decreases by -0.0172, for every additional minute spent on average on the field goals increases by 0.1178, for every additional shot on target goals increases by 1.01 and for every penalty kick attempted goals scored increases by 12.6. It should be noted that the relationship between goals scored and penalty kicks attempted is disproportionately larger due to the nature of most teams employing a designated penalty taker, which means a player who is given a penalty is likely to score many goals for this reason.*
+
+Now we check the normality and heteroskedasticity of residuals, along with any signs of colinearity between our predictors in the the current model.
+
+```{r, echo=FALSE}
+#Display normal quantile plot and residual plot
+myResPlots2(fitmodel)
+```
+
+*The normal quantile plot suggests that our data is not normally distributed as both tails curve outside the guidelines and the relationship is not entirely linear. Moreover, the fits and studentized residual plots shows many extreme outliers (points above and below the green boundary) and strong evidence of heteroskedaticity as the variance of residuals with smaller fitted values is less than the residuals with higher fitted values. *
+
+
+```{r, echo=FALSE}
+#Generate plots comparing relationships between predictors and explanatory variables
+pairsJDRS(soccer_regression)
+```
+
+*Based on the plot, it appears that the distribution for goals is heavily skewed to the right, which is likely due to the fact that a significant number of players scored 0 goals in the 2022/2023 season. Looking at the first row of plots, goals appears to have a linear relationship with all of the predictors. Between the predictors, there may be some concern for collinearity as there appears to be a slight linear relationship between assists and some of the other predictors.*
+
+
+The below is basically the same multiple regression model with the same predictors as the one above, but with the one alteration that we log-transformed our response variable (goals) to make the residuals more normal to fit the assumptiosn of multiple regression. 
+
+```{r, echo=FALSE}
+#Fit model according to BIC
+fitmodel2 <- lm(log(Goals+1) ~ Assists + PassCompletionPct + MinutesPer90 + ShotsOnTarget + PenaltyKicksAttempted, data = soccer_regression)
+
+#Get summary statistics for model
+summary(fitmodel2)
+
+#Display normal quantile plot and residual plot
+myResPlots2(fitmodel2)
+```
+
+
+**Findings and Discussion of Multiple Regression Results:**
+
+*In order to perform a boxcox, we had to add a factor of 0.1 to our response variable since it wouldn't accept minimum values of 0; in doing so, we received a lambda of -0.42, which when transforming the data based on the recommendation led to a normal quantile plot that was still not normal. In contrast, after looking at the distribution of goals being heavily right skewed, we used a natural log transformation instead to test a better fit, which in turn led to a normal quantile plot that is more linear and mostly contained in the guidelines (apart from the left tail), suggesting the data is somewhat normally distributed. Moreover, the fits vs residuals plot still contains extreme outliers but exhibits less evidence of heteroskedaticity although variance is not constant across the residuals. Based on the transformed model our R-squared increased to 0.4448 which implies that 44.48% of the variability in log(goals) scored can be explained by our model using the five predictors: assists, pass completion percentage, minutes per 90, shots on target, and penalty kicks attempted. All of our predictors have p-values less than our alpha of 0.05, which indicates that they are statistically significant predictors of goals. Moreover, based on our coefficients: *
+
++ for every additional assist log(goal) scored increases by 0.322522
++ for every one percent increase in pass completion percentage log(goals) decreases by -0.004833
++ for every additional minute spent on average on the field log(goals) increases by 0.041909
++ for every additional shot on target log(goals) increases by 0.359614 
++ for every penalty kick attempted log(goals) scored increases by 3.341135 
+
+*Although the log transformation may make it slightly harder to interpret the data, the bottom line is that all 5 predictors of goals are significant, and (apart from pass completion percentage which is the opposite) tend to be associated with an increase in goals scored as each predictor variable increases.*
+
+
+## Two Way ANOVA
+**Note: discussions of results are scattered throughout this section**
+
+For this project, we will be using two way ANOVA. Two way ANOVA is a statistical method used to compare the means of a response variable across two different independent variables (also known as factors) and to determine if there is an interaction between them.
+
+In this analysis, our continuous variable will be completed passes and we will be using League, Continent, and Position as our categorical variables. Before we begin, in order to do ANOVA, we want to ensure that all our combinations have at least one entry.
+
+```{r, echo=FALSE}
+
+# table of Continent by League
+table(soccer_data2$Continent, soccer_data2$League)
+
+# table of Position by League
+table(soccer_data2$Position, soccer_data2$League)
+
+# table of Continent by Position
+table(soccer_data2$Continent, soccer_data2$Position)
+
+```
+
+*As we can see in our table of Continent by Position, there is a 0 between Goalkeeper and Oceania, which causes problems when fitting the model with interaction terms because it implies that there are certain combinations of factors that do not occur in the data set. Because of this issue, we have decided to remove 'Oceania' for our analysis as it has the least amount of data available. Additionally, lets remove the empty row from the 'Continents.'*
+
+```{r, echo=FALSE}
+
+# Create a new data frame that does not include 'Oceania'
+soccer_data3 <- soccer_data2
+soccer_data3 <- subset(soccer_data3, !(Continent == "Oceania"))
+soccer_data3 <- subset(soccer_data3, Continent != "")
+
+```
+
+*Let's first create box plots to examine the relationship between goals and the categorical variables 'continent', 'league', and 'position'.*
+
+```{r, echo=FALSE}
+
+# We are going to log transform 'Goals' so that way it is easier to visualize 
+# the relationship between the variables.
+boxplot(log(Goals + 1) ~ Continent, data = soccer_data3, col = "cadetblue", 
+        las = 1, main = "Goals by Continent", cex.axis = 0.8, 
+        xlab = "Continent", ylab = "Log Transformed Goals")
+boxplot(log(Goals + 1) ~ League, data = soccer_data3, col = "coral1", 
+        las = 1, main = "Goals by League", cex.axis = 0.7, 
+        xlab = "Continent", ylab = "Log Transformed Goals")
+boxplot(log(Goals + 1) ~ Position, data = soccer_data3, col = "darkorchid1", 
+        las = 1, main = "Goals by Position", cex.axis = 0.8, 
+        xlab = "Continent", ylab = "Log Transformed Goals")
+
+
+```
+
+*The box plot comparing Goals and Continent suggests a relationship, as the median value for goals scored by players from Asia is higher compared to other continents. This is indicated by the line within Asia's box being above zero, unlike the medians for other continents, which are at zero. Additionally, the medians for Africa, Europe, North America, and South America are approximately 0, demonstrating that scoring is rare. Most outliers also come from Africa and Europe, indicating that the highest scorers tend to come from these continents. The box plot between Goals and League is relatively similar, with the medians being very close to each other, suggesting that league might not be a good predictor for goals. Finally, there appears to be a relationship between Goals and Position Type, which is expected. Goalkeepers obviously tend not to score, while forwards tend to score the most.*
+
+*Next we will create an interaction plot for each of the pairings for the categorical variables: Continent and League, Position and League, and Continent and Position. This is so that way we can see whether there are any significant relationships/interactions between the pairings.*
+
+```{r, echo=FALSE}
+
+par(cex = 0.7)
+
+# Create an interaction plot
+interaction.plot(soccer_data3$Continent, soccer_data3$League, soccer_data3$Goal, 
+                 type = 'b', lwd = 3, col = c(1:5), 
+                 main = "Interaction Plot of Continent and League", 
+                 cex.axis = 0.6, xlab = "Continent", ylab = "Goals")
+
+# Create an interaction plot
+interaction.plot(soccer_data3$Position, soccer_data3$League, 
+                 soccer_data3$Goal, type = 'b', lwd = 3, col = c(1:5), 
+                 main = "Interaction Plot of Position and League", 
+                 cex.axis = 0.8, xlab = "Position", ylab = "Goals")
+
+# Create an interaction plot
+interaction.plot(soccer_data3$Continent, soccer_data3$Position, 
+                 soccer_data3$Goal, type = 'b', lwd = 3, col = c(1:4), 
+                 main = "Interaction Plot of Continent and Position", 
+                 cex.axis = 0.6, xlab = "Continent", ylab = "Goals")
+
+```
+
+*For the interaction plot between continent and league, there does seem to be some interaction, as the lines are not moving in parallel with one another. In the interaction plot of position and league, the means between these positions appear to be roughly the same across leagues, indicating minimal interaction between position and league. For the interaction between continent and position, there also seems to be an interaction, as the lines are not moving in parallel. Based on these plots, we can assume that the interaction between position and league is the weakest, followed by continent and position, and then continent and league.*
+
+*Now we will calculate three different two-way ANOVA with one for each pair of categorical variables ('Continent' and 'League', 'Position' and 'Continent', and 'Position' and 'League').*
+
+```{r, echo=FALSE}
+
+goalsaov1 <- aov(soccer_data3$Goals ~ soccer_data3$Continent + 
+                   soccer_data3$League + 
+                   soccer_data3$Continent*soccer_data3$League)
+Anova(goalsaov1, type = 'III')
+
+goalsaov2 <- aov(soccer_data3$Goals ~ soccer_data3$Continent + 
+                   soccer_data3$Position + 
+                   soccer_data3$Continent*soccer_data3$Position)
+Anova(goalsaov2, type = 'III')
+
+goalsaov3 <- aov(soccer_data3$Goals ~ soccer_data3$Position + 
+                   soccer_data3$League + 
+                   soccer_data3$Position*soccer_data3$League)
+Anova(goalsaov3, type = 'III')
+
+```
+
+
+*These results are consistent with the interaction plot, in which the interaction between position and league was the lowest, followed by continent and position, and then continent and league. Upon analyzing all three tables, 'Continent' alone was not statistically significant, as the p-values of around 0.91 were all greater than 0.05, demonstrating that there are no significant differences in the number of goals across continents. Additionally, 'League' was not statistically significant, as the p-values of 0.08 and 0.61 were also greater than our critical value of 0.05. However, 'Position' was statistically significant (p-value of less than 0.05), which demonstrates that there are significant differences in the number of goals scored by players in different positions. When analyzing the interactions, though, all three p-values were much greater than 0.05. For the first table, we can conclude that the effect of the league on goals scored does not differ significantly across continents. For the second table, the effect of position on goals does not differ significantly across continents. Finally, for the third table, the effect of position on the number of goals does not differ significantly across leagues.*
+
+*To see if the model assumptions are met, we will create a residual and normal quantile plot to see if there are any outliers and heteroskedascity.*
+
+```{r, echo=FALSE}
+
+myResPlots2(goalsaov1)
+myResPlots2(goalsaov2)
+myResPlots2(goalsaov3)
+
+```
+
+*Model assumptions are not met as the normal quantile plot for all the interactions are not linear and there are outliers, heteroskedasticity, and the residuals do not seem normally distributed.*
+
+*We will now perform a Tukey Honest Significant Difference test on factors of our ANOVA model. According to our two way ANOVA analysis, position is the only statistically significant factor in terms of goals scored, so we will use a Tukey HSD test to determine which levels of position differ from each other.*
+
+```{r, echo=FALSE}
+
+TukeyHSD(goalsaov2, "soccer_data3$Position")
+#TukeyHSD(goalsaov3, "soccer_data3$Position")
+
+par(mar = c(5, 8, 4, 2) + 0.1)
+plot(TukeyHSD(goalsaov2, "soccer_data3$Position"), las = 1, cex.axis = 0.5)
+#plot(TukeyHSD(goalsaov3, "soccer_data3$Position"), las = 1, cex.axis = 0.5)
+#par(mar = c(5, 4, 4, 2) + 0.1)
+
+```
+
+*All pairs (Forward-Defender, Midfielder-Defender, Goalkeeper-Forward, Midfielder-Forward, Midfielder-Goalkeeper) are statistically significant, with confidence intervals that do not include 0 and p-values below 0.05, except for the Goalkeeper-Defender pair. This means players that specialize in multiple roles tend to have a statistically significant difference in goal scoring capabilities.*
+
+## ANCOVA
+
+**Note: discussions of results are scattered throughout this section**
+
+*We will be using ANCOVA to predict goals based on age but fit separate lines for our categorical variable Continent. Our goal is to visually assess the predictive ability of age on goals and whether or not the continent has an impact.*
+
+```{r, echo=FALSE}
+
+goalsmod1 <- lm(soccer_data3$Goals ~ soccer_data3$Age*soccer_data3$Continent)
+Anova(goalsmod1, type = 'III')
+summary(goalsmod1)
+
+```
+
+*Regarding the primary effects, the influence of age on goals scored was not statistically significant, with a p-value of 0.2047. This suggests that age does not markedly affect the number of goals scored. Similarly, the impact of continent alone was also not statistically significant, indicating that it does not substantially influence scoring. Additionally, the interaction effect between age and continent was not significant either, with a p-value of 0.8787. This indicates that the influence of age on goals scored is consistent across different continents. The model proved to be ineffective in explaining the variance in goals scored, as evidenced by the very low R-squared value of 0.006671, which indicates that the model accounts for only a minimal fraction of the variance in goals scored. Lastly, the wide range of residuals suggests the presence of potential outliers, which could be adversely affecting the performance of our model.*
+
+*Now we are going to make a plot that shows 'Goals' predicted by age with separate colors for each continent. Then we will superimpose predicted regression lines for each continent.*
+
+```{r, echo=FALSE}
+
+plot(Goals ~ Age, data = soccer_data2, col = factor(Continent), pch = 16, 
+     cex = .5, main = "Goals vs Age by Continent")
+
+legend("topleft", col = 1:5, legend = c("Africa", "Asia", "Europe", 
+                                        "North America", "Oceania", 
+                                        "South America"), pch = 16)
+
+coefs <- coef(goalsmod1)
+
+abline(a = coefs["(Intercept)"], b = coefs["soccer_data3$Age"], 
+       col = 1, lwd = 3)
+
+# For Asia
+intercept_asia <- coefs["(Intercept)"] + coefs["soccer_data3$ContinentAsia"]
+slope_asia <- coefs["soccer_data3$Age"] + 
+  coefs["soccer_data3$Age:soccer_data3$ContinentAsia"]
+abline(a = intercept_asia, b = slope_asia, col = 2, lwd = 3)
+
+# For Europe
+intercept_europe <- coefs["(Intercept)"] + 
+  coefs["soccer_data3$ContinentEurope"]
+slope_europe <- coefs["soccer_data3$Age"] +
+  coefs["soccer_data3$Age:soccer_data3$ContinentEurope"]
+abline(a = intercept_europe, b = slope_europe, col = 3, lwd = 3)
+
+# For North America
+intercept_north_america <- coefs["(Intercept)"] + 
+  coefs["soccer_data3$ContinentNorth America"]
+slope_north_america <- coefs["soccer_data3$Age"] + 
+  coefs["soccer_data3$Age:soccer_data3$ContinentNorth America"]
+abline(a = intercept_north_america, b = slope_north_america, col = 4, lwd = 3)
+
+# For South America
+intercept_south_america <- coefs["(Intercept)"] + 
+  coefs["soccer_data3$ContinentSouth America"]
+slope_south_america <- coefs["soccer_data3$Age"] + 
+  coefs["soccer_data3$Age:soccer_data3$ContinentSouth America"]
+abline(a = intercept_south_america, b = slope_south_america, col = 5, lwd = 3)
+
+```
+
+*From this plot, there is no obvious trend that indicates a strong relationship between age and goals scored. Additionally, there is no clear indication that players from one continent score significantly more or fewer goals than players from another.*
+
+
+
+## Conclusion & Summary
+Throughout the course of our analysis, we gained insights into various player characteristics and statistics that contributed to their ability to score goals and also impacted their performance in other respects. **First**, we found that the mean pass completion percent of defenders is statistically significantly greater than the mean pass completion percent of forwards using a t-test, suggesting that defenders are better at passing than forwards, subsequently generating a bootstrapped CI to corroborate that claim. **Second**, with a correlation test, we also found that there is a moderate positive correlation between the amount of yellow cards received by a player and the amount of tackles that they commited, suggesting that players who play rough also get more yellow cards. **Third**, we discovered that assists, minutes per 90, shots on target, and penalty kicks attempted are statistically significant positive predictors of the number of goals a player scores while pass completion percentage is a statistically significant negative predictor of number of goals scored, adding to our understanding of what characteristics of soccer players explain goal-scoring success. **Fourth**, with a permutation test, we concluded that defenders have a statistically significantly greater mean yellow card frequency compared to forwards, suggesting that defenders play rougher than forwards on average. **Fifth**, with ANOVA, we concluded that the interactions between our three categorical variables ‘Continent’, ‘League,’ and ‘Position’ for ‘Goals’ were not statistically significant (the effect of league on goals scored did not significantly differ across continent; the effect of position on goals did not significantly differ across continent; the effect of position on the number of goals does not significantly differ across league). **Lastly**, with ANCOVA, we found that the interaction between ‘Age’ and ‘Continent’ was not a statistically significant predictor for ‘Goals’, demonstrating that the influence of age on goals scored is consistent across different continents.  
+
